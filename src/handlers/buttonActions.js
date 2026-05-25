@@ -24,7 +24,8 @@ module.exports = {
                 await command.execute(interaction, client);
             } catch (error) {
                 console.error(`[ERREUR /${interaction.commandName}]`, error);
-                const msg = { content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true };
+                // MAINTENANT L'ERREUR S'AFFICHERA SUR DISCORD
+                const msg = { content: `Une erreur est survenue lors de l'exécution.\n\`\`\`js\n${error.message}\n\`\`\``, ephemeral: true };
                 try {
                     if (interaction.replied || interaction.deferred) await interaction.followUp(msg);
                     else await interaction.reply(msg);
@@ -38,7 +39,12 @@ module.exports = {
 
             // Modals /embed (sw_modal_*) → redirigés vers embed.handleInteraction
             if (interaction.customId.startsWith('sw_modal_')) {
-                return embedCommand.handleInteraction(interaction);
+                try {
+                    return await embedCommand.handleInteraction(interaction);
+                } catch (error) {
+                    console.error("[ERREUR MODAL EMBED]", error);
+                    return interaction.reply({ content: `Erreur embed: ${error.message}`, ephemeral: true }).catch(()=>{});
+                }
             }
 
             // Modals MP
@@ -91,7 +97,12 @@ module.exports = {
 
             // Boutons /embed (sw_*) → redirigés vers embed.handleInteraction
             if (interaction.customId.startsWith('sw_')) {
-                return embedCommand.handleInteraction(interaction);
+                try {
+                    return await embedCommand.handleInteraction(interaction);
+                } catch (error) {
+                    console.error("[ERREUR BOUTON EMBED]", error);
+                    return interaction.reply({ content: `Erreur embed: ${error.message}`, ephemeral: true }).catch(()=>{});
+                }
             }
 
             // Bouton répondre MP
