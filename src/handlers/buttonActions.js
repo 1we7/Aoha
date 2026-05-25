@@ -15,32 +15,35 @@ function validateSecureText(text) {
 
 module.exports = {
     async execute(interaction, client) {
-        // 1. GESTION DES COMMANDES SLASH
+
+        // 1. COMMANDES SLASH
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
             try {
                 await command.execute(interaction, client);
             } catch (error) {
-                console.error(error);
-                const errMsg = { content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true };
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp(errMsg).catch(() => {});
-                } else {
-                    await interaction.reply(errMsg).catch(() => {});
-                }
+                console.error(`[ERREUR /${interaction.commandName}]`, error);
+                try {
+                    const errMsg = { content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true };
+                    if (interaction.replied || interaction.deferred) {
+                        await interaction.followUp(errMsg);
+                    } else {
+                        await interaction.reply(errMsg);
+                    }
+                } catch (e) {}
             }
         }
 
-        // 2. GESTION DES SUBMISSIONS DE MODALS
+        // 2. MODAL SUBMITS
         else if (interaction.isModalSubmit()) {
 
-            // === Modals du système /embed (Sandwich) — priorité absolue ===
+            // Modals du système /embed — redirigés vers embed.handleInteraction
             if (interaction.customId.startsWith('sw_modal_')) {
                 return embedCommand.handleInteraction(interaction);
             }
 
-            // Traitement Modal MP
+            // Modal MP
             if (interaction.customId.startsWith('mp_modal_') || interaction.customId.startsWith('mp_reply_modal_')) {
                 const isReply = interaction.customId.startsWith('mp_reply_modal_');
                 const targetId = interaction.customId.split('_')[isReply ? 3 : 2];
@@ -71,7 +74,7 @@ module.exports = {
                 }
             }
 
-            // Traitement Modal embed simple (ancien système — conservé pour compatibilité)
+            // Modal embed legacy
             else if (interaction.customId === 'embed_generator_modal') {
                 const title = interaction.fields.getTextInputValue('embed_title');
                 const description = interaction.fields.getTextInputValue('embed_desc');
@@ -88,15 +91,15 @@ module.exports = {
             }
         }
 
-        // 3. GESTION DES BOUTONS
+        // 3. BOUTONS
         else if (interaction.isButton()) {
 
-            // === Boutons du système /embed (Sandwich) — priorité absolue ===
+            // Boutons du système /embed — redirigés vers embed.handleInteraction
             if (interaction.customId.startsWith('sw_')) {
                 return embedCommand.handleInteraction(interaction);
             }
 
-            // Bouton Répondre du système MP
+            // Bouton répondre MP
             if (interaction.customId.startsWith('mp_reply_btn_')) {
                 const targetId = interaction.customId.split('_')[3];
                 const modal = new ModalBuilder().setCustomId(`mp_reply_modal_${targetId}`).setTitle('Répondre anonymement');
@@ -105,7 +108,7 @@ module.exports = {
                 await interaction.showModal(modal);
             }
 
-            // Bouton Participer au Giveaway
+            // Bouton giveaway
             else if (interaction.customId.startsWith('giveaway_join_')) {
                 const giveawayId = interaction.customId.split('_')[2];
                 const db = client.getDB();
@@ -127,7 +130,7 @@ module.exports = {
                 await interaction.reply({ content: "✅ Inscription enregistrée !", ephemeral: true });
             }
 
-            // Système anti-mention (Boutons réservés à l'Owner)
+            // Boutons anti-mention (Owner only)
             else if (interaction.customId.startsWith('ping_approve_') || interaction.customId.startsWith('ping_deny_')) {
                 if (interaction.user.id !== interaction.guild.ownerId) {
                     return interaction.reply({ content: "❌ Seul le propriétaire du serveur peut valider cette action.", ephemeral: true });
@@ -146,12 +149,12 @@ module.exports = {
                     await channel.send({ content: `📢 **Message de <@${pingData.authorId}> :**\n${pingData.content}` });
                     await interaction.reply({ content: "✅ Mention validée et renvoyée !", ephemeral: true });
                 } else {
-                    await interaction.reply({ content: "❌ Message rejeté. Pense à sanctionner le membre si nécessaire.", ephemeral: true });
+                    await interaction.reply({ content: "❌ Message rejeté.", ephemeral: true });
                 }
 
                 delete db.pendingPings[pingId];
                 client.saveDB(db);
-                try { await interaction.message.delete(); } catch(e) {}
+                try { await interaction.message.delete(); } catch (e) {}
             }
         }
     }
