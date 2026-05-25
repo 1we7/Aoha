@@ -1,32 +1,28 @@
-// commands/invites.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('invites')
-    .setDescription('Afficher les stats d’invitation d’un utilisateur (Owner only)')
-    .addUserOption(o => o.setName('membre').setDescription('Membre (optionnel)').setRequired(false)),
+    data: new SlashCommandBuilder()
+        .setName('invites')
+        .setDescription('Affiche le nombre de personnes recrutées par un membre.')
+        .addUserOption(opt => opt.setName('membre').setDescription('Le membre à analyser').setRequired(true)),
 
-  async execute(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: 'Commande disponible uniquement en serveur.', ephemeral: true });
-    if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: 'Commande réservée au Owner du serveur.', ephemeral: true });
+    async execute(interaction) {
+        if (interaction.user.id !== interaction.guild.ownerId) {
+            return interaction.reply({ content: "❌ Commande réservée à l'Owner.", ephemeral: true });
+        }
 
-    const target = interaction.options.getUser('membre') || interaction.user;
-    const invites = await interaction.guild.invites.fetch().catch(() => null);
-    if (!invites) return interaction.reply({ content: 'Impossible de récupérer les invites (permissions manquantes).', ephemeral: true });
+        const target = interaction.options.getUser('membre');
+        const invites = await interaction.guild.invites.fetch();
+        const userInvites = invites.filter(i => i.inviter && i.inviter.id === target.id);
 
-    const userInvites = invites.filter(i => i.inviter && i.inviter.id === target.id);
-    const total = userInvites.reduce((acc, i) => acc + (i.uses || 0), 0);
+        let totalUses = 0;
+        userInvites.forEach(invite => totalUses += invite.uses);
 
-    const embed = new EmbedBuilder()
-      .setTitle(`Statistiques d'invites pour ${target.tag}`)
-      .addFields(
-        { name: 'Total de personnes invitées', value: `${total}`, inline: true },
-        { name: 'Liens actifs', value: `${userInvites.size}`, inline: true }
-      )
-      .setColor('#FFD166')
-      .setTimestamp();
+        const inviteEmbed = new EmbedBuilder()
+            .setColor('#2b2d31')
+            .setTitle(`📨 Statistiques d'invitation de ${target.username}`)
+            .setDescription(`<@${target.id}> a fait rejoindre un total de **${totalUses}** membres via ses liens personnalisés.`);
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
-  }
+        await interaction.reply({ embeds: [inviteEmbed] });
+    }
 };
