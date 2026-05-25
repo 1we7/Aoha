@@ -3,42 +3,39 @@
 const fs = require('fs');
 const path = require('path');
 
+// Écrit dans le dossier global /data (liaison avec le volume permanent Railway)
 const DATA_FILE = path.join(__dirname, '../../data/published_actions.json');
 
-/**
- * Enregistre la configuration persistante d'un bouton configuré.
- * @param {string} actionId - L'ID unique du bouton (ex: "act_32m1z9")
- * @param {Object} config - Configuration complète de l'action du bouton
- */
-function saveAction(actionId, config) {
-  let data = {};
+function loadData() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    if (!fs.existsSync(DATA_FILE)) {
+      return {};
     }
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   } catch (err) {
-    console.error('[ActionStorage] Erreur de lecture, réinitialisation...', err);
+    console.error('[ActionStorage] Erreur de lecture:', err);
+    return {};
   }
-
-  data[actionId] = config;
-
-  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-/**
- * Récupère la configuration d'un bouton publié via son ID unique.
- * @param {string} actionId 
- * @returns {Object|null}
- */
-function getAction(actionId) {
+function saveData(data) {
   try {
-    if (!fs.existsSync(DATA_FILE)) return null;
-    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    return data[actionId] || null;
-  } catch {
-    return null;
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('[ActionStorage] Erreur d\'écriture:', err);
   }
+}
+
+function saveAction(actionId, textValue) {
+  const data = loadData();
+  data[actionId] = textValue;
+  saveData(data);
+}
+
+function getAction(actionId) {
+  const data = loadData();
+  return data[actionId] || null;
 }
 
 module.exports = { saveAction, getAction };
