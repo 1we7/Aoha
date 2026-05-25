@@ -1,53 +1,56 @@
-// commands/remove.js
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('remove')
-    .setDescription('Supprimer les messages récents d’un membre et option ban/timeout (Owner only)')
-    .addUserOption(o => o.setName('membre').setDescription('Membre à traiter').setRequired(true))
-    .addBooleanOption(o => o.setName('ban').setDescription('Bannir après suppression').setRequired(false))
-    .addIntegerOption(o => o.setName('timeout_minutes').setDescription('Timeout en minutes (0 = none)').setRequired(false)),
+    data: new SlashCommandBuilder()
+        .setName('remove')
+        .setDescription('Supprime les messages récents d\'un membre et permet de le sanctionner.')
+        .addUserOption(opt => opt.setName('membre').setDescription('Le membre ciblé').setRequired(true))
+        .addStringOption(opt => opt.setName('sanction').setDescription('Action complémentaire').addChoices(
+            { name: 'Rien', value: 'none' },
+            { name: 'Timeout 24h', value: 'timeout' },
+            { name: 'Exclure (Kick)', value: 'kick' },
+            { name: 'Bannir', value: 'ban' }
+        ).setRequired(false)),
 
-  async execute(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: 'Commande disponible uniquement en serveur.', ephemeral: true });
-    if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: 'Commande réservée au Owner du serveur.', ephemeral: true });
-
-    const member = interaction.options.getMember('membre');
-    const doBan = interaction.options.getBoolean('ban') || false;
-    const timeoutMinutes = interaction.options.getInteger('timeout_minutes') || 0;
-
-    if (!member) return interaction.reply({ content: 'Membre introuvable.', ephemeral: true });
-
-    await interaction.reply({ content: 'Démarrage de la suppression (cela peut prendre du temps)…', ephemeral: true });
-
-    // Parcourir les channels textuels et bulkDelete par batch (limite 14 jours)
-    const channels = interaction.guild.channels.cache.filter(c => c.isTextBased());
-    for (const [id, ch] of channels) {
-      try {
-        // fetch messages and filter by author
-        const fetched = await ch.messages.fetch({ limit: 100 }).catch(() => null);
-        if (!fetched) continue;
-        const toDelete = fetched.filter(m => m.author && m.author.id === member.id);
-        if (toDelete.size > 0) {
-          // bulk delete only messages younger than 14 days
-          const deletable = toDelete.filter(m => (Date.now() - m.createdTimestamp) < 14 * 24 * 3600 * 1000);
-          if (deletable.size > 0) await ch.bulkDelete(deletable, true).catch(() => null);
+    async execute(interaction) {
+        if (interaction.user.id !== interaction.guild.ownerId) {
+            return interaction.reply({ content: "❌ Commande réservée à l'Owner.", ephemeral: true });
         }
-      } catch (e) { /* ignore per-channel errors */ }
-    }
 
-    // Timeout
-    if (timeoutMinutes > 0) {
-      const until = Date.now() + timeoutMinutes * 60 * 1000;
-      await member.timeout(timeoutMinutes * 60 * 1000, `Action remove par Owner`).catch(() => null);
-    }
+        await interaction.deferReply({ ephemeral: true });
+        const target = interaction.options.getMember('membre');
+        const action = interaction.options.getString('sanction') || 'none';
 
-    // Ban
-    if (doBan) {
-      await member.ban({ reason: 'Banni via commande remove par Owner' }).catch(() => null);
-    }
+        if (!target) return interaction.editReply({ content: "Membre introuvable." });
 
-    await interaction.followUp({ content: `Suppression terminée. Ban: ${doBan}. Timeout: ${timeoutMinutes} minutes.`, ephemeral: true });
-  }
+        // Recherche et purge des messages récents dans tous les salons textuels
+        const channels = interaction.guild.channels.cache.filter(c => c.isTextBitRateAllowed === undefined && c.messages);
+        let deletedCount = 0;
+
+        for (const [_, channel] of channels) {
+            try {
+                const messages = await channel.messages.fetch({ limit: 100 });
+                const userMessages = messages.filter(m => m.author.id === target.id);
+                if (userMessages.size > 0) {
+                    await channel.bulkDelete(userMessages, true);
+                    deletedCount += userMessages.size;
+                }
+            } catch (e) {}
+        }
+
+        // Application de la sanction demandée
+        let sanctionText = "Aucune sanction";
+        if (action === 'timeout') {
+            await target.timeout(24 * 60 * 60 * 1000, "Purge via /remove par l'Owner");
+            sanctionText = "Timeout 24 heures";
+        } else if (action === 'kick') {
+            await target.kick("Purge via /remove par l'Owner");
+            sanctionText = "Expulsion (Kick)";
+        } else if (action === 'ban') {
+            await target.ban({ reason: "Purge via /remove par l'Owner" });
+            sanctionText = "Bannissement définitif";
+        }
+
+        await interaction.editReply({ content: `✅ Nettoyage terminé ! **${deletedCount}** messages supprimés.\n**Sanction appliquée :** ${sanctionText}` });
+    }
 };
