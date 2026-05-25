@@ -120,7 +120,7 @@ module.exports = {
         if (interaction.user.id !== interaction.guild.ownerId)
             return interaction.reply({ content: '❌ Seul le propriétaire du serveur peut utiliser cette commande.', ephemeral: true });
 
-        const subcommand = interaction.options.getSubcommand();
+        const subcommand = interaction.options.getSubcommand(false);  if (!subcommand) {     return interaction.reply({         content: '❌ Utilise une sous-commande : `/embed create`, `/embed edit`, `/embed save`, `/embed load`',         ephemeral: true     }); }
         const data       = readData();
 
         if (!activeBuilders.has(interaction.user.id))
