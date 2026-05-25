@@ -30,31 +30,27 @@ client.getDB  = ()     => JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
 client.saveDB = (data) => fs.writeFileSync(dbPath, JSON.stringify(data, null, 4));
 
 // ── Chargement des commandes ─────────────────────────────────────────────────
-// Le try/catch individuel est CRITIQUE : si un fichier plante (ex: module manquant),
-// les autres continuent de se charger normalement.
 const commandsPath = path.join(__dirname, 'src', 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
-
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    try {
-        const command = require(filePath);
-        if ('data' in command && 'execute' in command) {
-            client.commands.set(command.data.name, command);
-            client.commandArray.push(command.data.toJSON());
-            console.log(`✅ Commande chargée : ${command.data.name}`);
-        } else {
-            console.warn(`⚠️  ${file} : pas de propriété "data" ou "execute", ignoré.`);
+if (fs.existsSync(commandsPath)) {
+    const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        try {
+            const command = require(filePath);
+            if ('data' in command && 'execute' in command) {
+                client.commands.set(command.data.name, command);
+                client.commandArray.push(command.data.toJSON());
+                console.log(`✅ Commande chargée : ${command.data.name}`);
+            } else {
+                console.warn(`⚠️  ${file} : pas de propriété "data" ou "execute", ignoré.`);
+            }
+        } catch (err) {
+            console.error(`❌ Erreur chargement ${file} :`, err);
         }
-    } catch (err) {
-        console.error(`❌ Erreur chargement ${file} :`, err.message);
     }
 }
 
 // ── Déploiement automatique des commandes au démarrage ───────────────────────
-// Si GUILD_ID est défini → déploiement instantané sur ce serveur.
-// Sinon → déploiement global (peut prendre jusqu'à 1h sur Discord).
-// Sur Railway : ajoute GUILD_ID dans les variables d'environnement pour l'instantané.
 client.once('ready', async () => {
     console.log(`🤖 Connecté : ${client.user.tag}`);
     console.log(`📦 ${client.commandArray.length} commandes à déployer...`);
@@ -72,7 +68,7 @@ client.once('ready', async () => {
                 Routes.applicationCommands(client.user.id),
                 { body: client.commandArray }
             );
-            console.log('✅ Commandes déployées globalement (peut prendre jusqu\'à 1h).');
+            console.log('✅ Commandes déployées globalement. ATTENTION: L\'affichage prendra jusqu\'à 1h sans GUILD_ID sur Railway.');
         }
     } catch (err) {
         console.error('❌ Erreur déploiement commandes :', err);
@@ -159,7 +155,11 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 // ── Toutes les interactions → handler central ────────────────────────────────
 const interactionHandler = require('./src/handlers/buttonActions.js');
 client.on('interactionCreate', async (interaction) => {
-    await interactionHandler.execute(interaction, client);
+    try {
+        await interactionHandler.execute(interaction, client);
+    } catch (error) {
+        console.error("❌ ERREUR GLOBALE DANS L'INTERACTION :", error);
+    }
 });
 
 client.login(process.env.TOKEN);
