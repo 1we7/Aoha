@@ -19,7 +19,7 @@ const {
 } = require('discord.js');
 
 // ─────────────────────────────────────────────
-// STATE FACTORY
+// FABRIQUE DE SESSIONS
 // ─────────────────────────────────────────────
 function createSession() {
   return {
@@ -40,7 +40,7 @@ function createSession() {
 const sessions = new Map();
 
 // ─────────────────────────────────────────────
-// EMBED PREVIEW BUILDER
+// PRÉVISUALISATION DE L'EMBED
 // ─────────────────────────────────────────────
 function buildPreview(state) {
   const embed = new EmbedBuilder()
@@ -57,7 +57,7 @@ function buildPreview(state) {
 }
 
 // ─────────────────────────────────────────────
-// STEP RENDERERS
+// ETAPES DE RENDU DU CONSTRUCTEUR
 // ─────────────────────────────────────────────
 function renderStep1(state) {
   const preview = buildPreview(state);
@@ -103,7 +103,6 @@ function renderStep3(state) {
   preview.setFooter({ text: `Étape 3/4 — Boutons (${btnCount}/5)${state.footer ? ` | ${state.footer}` : ''}` });
 
   const rows = [];
-
   const addRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('eb_add_button')
@@ -134,7 +133,6 @@ function renderStep3(state) {
   );
 
   rows.push(navRow);
-
   return { embeds: [preview], components: rows };
 }
 
@@ -172,7 +170,7 @@ function renderStep(state) {
 }
 
 // ─────────────────────────────────────────────
-// BUTTON CONFIGURATOR
+// CONFIGURATEUR DE BOUTON INDIVIDUEL
 // ─────────────────────────────────────────────
 function renderButtonConfig(state, index) {
   const isNew = index === state.buttons.length;
@@ -233,18 +231,12 @@ function styleName(style) {
 }
 
 function actionLabel(type) {
-  const map = {
-    ticket:      '🎟️ Ticket',
-    link:        '🔗 Lien',
-    ephemeral:   '💬 Éphémère',
-    dm:          '📩 DM',
-    channel_msg: '🧾 Message salon',
-  };
+  const map = { ticket: '🎟️ Ticket', link: '🔗 Lien', ephemeral: '💬 Éphémère', dm: '📩 DM', channel_msg: '🧾 Message salon' };
   return map[type] || type;
 }
 
 // ─────────────────────────────────────────────
-// MODALS
+// SYSTÈME DE MODALS (CONTENUS TEXTUELS)
 // ─────────────────────────────────────────────
 function modalForField(field) {
   const configs = {
@@ -276,9 +268,9 @@ function modalForField(field) {
 }
 
 // ─────────────────────────────────────────────
-// PUBLISH — CRÉATION DU MESSAGE FINAL (1 ligne par bouton)
+// COMPILATION DU MESSAGE (Mise en page verticale : 1 ActionRow = 1 bouton)
 // ─────────────────────────────────────────────
-function compileFinalMessage(state, guild) {
+function compileFinalMessage(state) {
   const embed = new EmbedBuilder()
     .setTitle(state.title || null)
     .setDescription(state.description || null)
@@ -310,7 +302,6 @@ function compileFinalMessage(state, guild) {
         const roles = (b.ticketStaffRoles || []).join(';');
         customId = `action_ticket_${i}:${b.ticketCategory || ''}:${b.ticketPrefix || 'ticket-'}:${roles}`;
       } else {
-        // Sauvegarde de l'action de texte (éphémère/DM/salon) dans le fichier JSON persistent
         const actionId = Math.random().toString(36).substring(2, 11);
         try {
           const { saveAction } = require('../utils/actionStorage');
@@ -330,7 +321,7 @@ function compileFinalMessage(state, guild) {
 
       if (b.emoji) bb.setEmoji(b.emoji);
       btnRow.addComponents(bb);
-      components.push(btnRow); // Ajoute chaque bouton dans une ligne exclusive
+      components.push(btnRow); // Chaque ligne reçoit un seul bouton
     }
   }
 
@@ -338,7 +329,7 @@ function compileFinalMessage(state, guild) {
 }
 
 // ─────────────────────────────────────────────
-// INTERACTION HANDLER
+// COLLECTEUR DU CONSTRUCTEUR
 // ─────────────────────────────────────────────
 async function startCollector(interaction, message) {
   const userId = interaction.user.id;
@@ -519,14 +510,14 @@ async function startCollector(interaction, message) {
     if (reason === 'published') return;
     sessions.delete(userId);
     await message.edit({
-      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('⏰ Session expirée').setDescription('Votre session de builder d\'embed a expiré. Relancez `/embed` pour recommencer.')],
+      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('⏰ Session expirée').setDescription('Votre session de configuration a expiré. Relancez `/embed`.')],
       components: [],
     }).catch(() => null);
   });
 }
 
 // ─────────────────────────────────────────────
-// TICKET CONFIG VIEW
+// CONFIGURATION DU FORMAT TICKET
 // ─────────────────────────────────────────────
 async function renderTicketConfig(state, index) {
   const btn = state.buttons[index];
@@ -548,7 +539,7 @@ async function renderTicketConfig(state, index) {
 }
 
 // ─────────────────────────────────────────────
-// PUBLISH HANDLER
+// ENVOI DE L'EMBED FINAL
 // ─────────────────────────────────────────────
 async function handlePublish(interaction, state, guild) {
   const channel = guild.channels.cache.get(state.targetChannel);
@@ -557,7 +548,7 @@ async function handlePublish(interaction, state, guild) {
     return;
   }
 
-  const { embed, components } = compileFinalMessage(state, guild);
+  const { embed, components } = compileFinalMessage(state);
 
   try {
     await channel.send({ embeds: [embed], components });
