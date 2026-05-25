@@ -3,40 +3,32 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, '../../data/builder_sessions.json');
+const DATA_FILE = path.join(__dirname, '../../data/ticket_counters.json');
 
-function loadSessions() {
+/**
+ * Returns the next ticket number for a given guild + prefix, then increments it.
+ * Counter is persisted to disk so it survives bot restarts.
+ * @param {string} guildId
+ * @param {string} prefix  e.g. "ticket-"
+ * @returns {string}  e.g. "ticket-042"
+ */
+function nextTicketName(guildId, prefix) {
+  let data = {};
+
   try {
-    if (!fs.existsSync(DATA_FILE)) return {};
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch (err) {
-    console.error('[SessionStorage] Erreur de lecture:', err);
-    return {};
+    data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch {
+    // File doesn't exist yet — start fresh
   }
+
+  const key = `${guildId}_${prefix}`;
+  const count = (data[key] ?? 0) + 1;
+  data[key] = count;
+
+  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+
+  return `${prefix}${String(count).padStart(3, '0')}`;
 }
 
-function saveSessions(data) {
-  try {
-    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error('[SessionStorage] Erreur d\'écriture:', err);
-  }
-}
-
-module.exports = {
-  get: (userId) => loadSessions()[userId] || null,
-  set: (userId, state) => {
-    const data = loadSessions();
-    data[userId] = state;
-    saveSessions(data);
-  },
-  delete: (userId) => {
-    const data = loadSessions();
-    if (data[userId]) {
-      delete data[userId];
-      saveSessions(data);
-    }
-  },
-  has: (userId) => !!loadSessions()[userId]
-};
+module.exports = { nextTicketName };
