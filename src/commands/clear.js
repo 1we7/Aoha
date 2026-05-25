@@ -1,43 +1,55 @@
-// commands/clear.js
 const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('clear')
-    .setDescription('Supprimer des messages (Owner only)')
-    .addStringOption(o => o.setName('amount').setDescription('Nombre ou "all"').setRequired(true)),
+    data: new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Supprime massivement les messages du salon courant.')
+        .addStringOption(opt => opt.setName('quantite').setDescription('Nombre de messages (1-9999) ou le mot "all"').setRequired(true)),
 
-  async execute(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: 'Commande disponible uniquement en serveur.', ephemeral: true });
-    if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: 'Commande réservée au Owner du serveur.', ephemeral: true });
+    async execute(interaction) {
+        if (interaction.user.id !== interaction.guild.ownerId) {
+            return interaction.reply({ content: "❌ Commande réservée à l'Owner.", ephemeral: true });
+        }
 
-    const amountRaw = interaction.options.getString('amount');
-    if (!interaction.channel.isTextBased()) return interaction.reply({ content: 'Salon non textuel.', ephemeral: true });
+        const input = interaction.options.getString('quantite');
+        await interaction.deferReply({ ephemeral: true });
 
-    if (amountRaw.toLowerCase() === 'all') {
-      // fetch and bulk delete in batches
-      await interaction.reply({ content: 'Vider le salon (opération en cours)…', ephemeral: true });
-      let fetched;
-      do {
-        fetched = await interaction.channel.messages.fetch({ limit: 100 });
-        const deletable = fetched.filter(m => (Date.now() - m.createdTimestamp) < 14*24*3600*1000);
-        if (deletable.size > 0) await interaction.channel.bulkDelete(deletable, true).catch(() => null);
-      } while (fetched.size >= 2);
-      return interaction.followUp({ content: 'Salon vidé (dans la limite de l’API).', ephemeral: true });
-    } else {
-      const n = parseInt(amountRaw, 10);
-      if (isNaN(n) || n < 1 || n > 9999) return interaction.reply({ content: 'Nombre invalide (1-9999).', ephemeral: true });
-      // bulkDelete max 100 at once; loop
-      let remaining = n;
-      while (remaining > 0) {
-        const toFetch = Math.min(100, remaining);
-        const fetched = await interaction.channel.messages.fetch({ limit: toFetch }).catch(() => null);
-        if (!fetched || fetched.size === 0) break;
-        const deletable = fetched.filter(m => (Date.now() - m.createdTimestamp) < 14*24*3600*1000);
-        if (deletable.size > 0) await interaction.channel.bulkDelete(deletable, true).catch(() => null);
-        remaining -= fetched.size;
-      }
-      return interaction.reply({ content: `Suppression demandée: ${n} messages (opération terminée).`, ephemeral: true });
+        if (input.toLowerCase() === 'all') {
+            let totalDeleted = 0;
+            let fetched;
+            do {
+                fetched = await interaction.channel.messages.fetch({ limit: 100 });
+                // Filtre les messages de moins de 14 jours (limite stricte API Discord)
+                const deletable = fetched.filter(m => (Date.now() - m.createdTimestamp) < 1209600000);
+                if (deletable.size === 0) break;
+                await interaction.channel.bulkDelete(deletable, true);
+                totalDeleted += deletable.size;
+            } while (fetched.size >= 100 && totalDeleted < 500); // Protection pour éviter le spam API rate limit
+
+            return interaction.editReply({ content: `🧹 Le salon a été vidé ! (**${totalDeleted}** messages récents purgés).` });
+        }
+
+        const amount = parseInt(input);
+        if (isNaN(amount) || amount < 1 || amount > 9999) {
+            return interaction.editReply({ content: "❌ Quantité invalide. Indique un nombre entre 1 et 9999 ou tape 'all'." });
+        }
+
+        // Discord limite bulkDelete à 100 messages par appel
+        let remaining = amount;
+        let totalPurged = 0;
+
+        while (remaining > 0) {
+            const deleteBatch = Math.min(remaining, 100);
+            const fetched = await interaction.channel.messages.fetch({ limit: deleteBatch });
+            const deletable = fetched.filter(m => (Date.now() - m.createdTimestamp) < 1209600000);
+            
+            if (deletable.size === 0) break;
+            await interaction.channel.bulkDelete(deletable, true);
+            totalPurged += deletable.size;
+            remaining -= deleteBatch;
+            if (fetched.size < deleteBatch) break;
+        }
+
+        await interaction.editReply({ content: `🧹 **${totalPurged}** messages ont été effacés avec succès.` });
     }
-  }
 };
