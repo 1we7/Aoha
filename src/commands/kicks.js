@@ -1,29 +1,39 @@
-// commands/kicks.js
 const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('kicks')
-    .setDescription('Expulser plusieurs membres (Owner only)')
-    .addStringOption(o => o.setName('ids').setDescription('Liste d\'IDs ou mentions séparées par des espaces').setRequired(true))
-    .addStringOption(o => o.setName('reason').setDescription('Raison').setRequired(false)),
+    data: new SlashCommandBuilder()
+        .setName('kicks')
+        .setDescription('Expulse plusieurs personnes simultanément via IDs ou mentions (Owner ONLY).')
+        .addStringOption(opt => opt.setName('targets').setDescription('IDs ou Mentions des cibles séparés par des espaces').setRequired(true))
+        .addStringOption(opt => opt.setName('raison').setDescription('Raison du kick collectif').setRequired(false)),
 
-  async execute(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: 'Commande disponible uniquement en serveur.', ephemeral: true });
-    if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: 'Commande réservée au Owner du serveur.', ephemeral: true });
+    async execute(interaction) {
+        if (interaction.user.id !== interaction.guild.ownerId) {
+            return interaction.reply({ content: "❌ Réservé à l'Owner.", ephemeral: true });
+        }
+        const input = interaction.options.getString('targets');
+        const reason = interaction.options.getString('raison') || 'Expulsion groupée par l\'Owner';
 
-    const idsRaw = interaction.options.getString('ids');
-    const reason = interaction.options.getString('reason') || 'Aucune raison fournie';
-    const ids = idsRaw.split(/\s+/).map(s => s.replace(/[<@!>]/g,'')).filter(Boolean);
+        // Extraction propre de tous les IDs valides (qu'ils soient entrés en mention ou en ID brut)
+        const matches = input.match(/\d+/g) || [];
+        if (matches.length === 0) return interaction.reply({ content: "❌ Aucun identifiant valide détecté.", ephemeral: true });
 
-    const results = [];
-    for (const id of ids) {
-      const member = await interaction.guild.members.fetch(id).catch(() => null);
-      if (!member) { results.push(`${id}: introuvable`); continue; }
-      await member.kick(reason).catch(() => { results.push(`${id}: échec`); return; });
-      results.push(`${id}: expulsé`);
+        await interaction.deferReply();
+        let kicked = [];
+        let failed = [];
+
+        for (const id of matches) {
+            try {
+                const member = await interaction.guild.members.fetch(id);
+                await member.kick(reason);
+                kicked.push(member.user.username);
+            } catch {
+                failed.push(id);
+            }
+        }
+
+        await interaction.editReply({ 
+            content: `👢 **Rapport d'expulsion collective :**\n✅ Expulsés : ${kicked.join(', ') || 'Aucun'}\n❌ Échecs (Introuvables/Hiérarchie trop haute) : ${failed.join(', ') || 'Aucun'}` 
+        });
     }
-
-    await interaction.reply({ content: `Résultats:\n${results.join('\n')}`, ephemeral: true });
-  }
 };
