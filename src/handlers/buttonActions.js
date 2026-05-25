@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const embedCommand = require('../commands/embed.js');
 
 const BLACKLISTED_WORDS = ['merde', 'putain', 'connard', 'salope', 'encule', 'pd', 'ntm'];
 
@@ -22,13 +23,23 @@ module.exports = {
                 await command.execute(interaction, client);
             } catch (error) {
                 console.error(error);
-                await interaction.reply({ content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true });
+                const errMsg = { content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true };
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp(errMsg).catch(() => {});
+                } else {
+                    await interaction.reply(errMsg).catch(() => {});
+                }
             }
         }
 
         // 2. GESTION DES SUBMISSIONS DE MODALS
         else if (interaction.isModalSubmit()) {
-            
+
+            // === Modals du système /embed (Sandwich) — priorité absolue ===
+            if (interaction.customId.startsWith('sw_modal_')) {
+                return embedCommand.handleInteraction(interaction);
+            }
+
             // Traitement Modal MP
             if (interaction.customId.startsWith('mp_modal_') || interaction.customId.startsWith('mp_reply_modal_')) {
                 const isReply = interaction.customId.startsWith('mp_reply_modal_');
@@ -60,7 +71,7 @@ module.exports = {
                 }
             }
 
-            // Traitement Modal /embed
+            // Traitement Modal embed simple (ancien système — conservé pour compatibilité)
             else if (interaction.customId === 'embed_generator_modal') {
                 const title = interaction.fields.getTextInputValue('embed_title');
                 const description = interaction.fields.getTextInputValue('embed_desc');
@@ -79,7 +90,12 @@ module.exports = {
 
         // 3. GESTION DES BOUTONS
         else if (interaction.isButton()) {
-            
+
+            // === Boutons du système /embed (Sandwich) — priorité absolue ===
+            if (interaction.customId.startsWith('sw_')) {
+                return embedCommand.handleInteraction(interaction);
+            }
+
             // Bouton Répondre du système MP
             if (interaction.customId.startsWith('mp_reply_btn_')) {
                 const targetId = interaction.customId.split('_')[3];
@@ -96,13 +112,12 @@ module.exports = {
                 if (!db.giveaways[giveawayId]) return interaction.reply({ content: "❌ Ce giveaway est terminé.", ephemeral: true });
 
                 if (db.giveaways[giveawayId].participants.includes(interaction.user.id)) {
-                    return interaction.reply({ content: "⚠️ Tu participes déjà déjà à ce tirage !", ephemeral: true });
+                    return interaction.reply({ content: "⚠️ Tu participes déjà à ce tirage !", ephemeral: true });
                 }
 
                 db.giveaways[giveawayId].participants.push(interaction.user.id);
                 client.saveDB(db);
 
-                // Mise à jour visuelle instantanée du compteur sur le bouton (Components V2 Style)
                 const count = db.giveaways[giveawayId].participants.length;
                 const updatedRow = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId(`giveaway_join_${giveawayId}`).setLabel(`Participer (${count})`).setStyle(ButtonStyle.Primary)
@@ -118,8 +133,9 @@ module.exports = {
                     return interaction.reply({ content: "❌ Seul le propriétaire du serveur peut valider cette action.", ephemeral: true });
                 }
 
-                const action = interaction.customId.split('_')[1];
-                const pingId = interaction.customId.split('_')[2];
+                const parts = interaction.customId.split('_');
+                const action = parts[1];
+                const pingId = parts[2];
                 const db = client.getDB();
                 const pingData = db.pendingPings[pingId];
 
