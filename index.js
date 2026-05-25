@@ -104,11 +104,10 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // 2. Sécurité anti "Échec de l'interaction" pour le builder (/embed)
+// 2. Sécurité anti "Échec de l'interaction" pour le builder (/embed)
     if (customId.startsWith('eb_') || customId.startsWith('ebbtn_')) {
-      const { sessions } = require('./src/commands/embed.js');
+      const sessions = require('./src/utils/sessionStorage');
       
-      // Si Railway a redémarré, la mémoire s'est vidée. On bloque l'erreur rouge proprement :
       if (!sessions.has(interaction.user.id)) {
         await interaction.reply({
           content: '❌ **Session expirée** : Le bot a redémarré ou vous avez été inactif trop longtemps. Veuillez relancer la commande `/embed`.',
