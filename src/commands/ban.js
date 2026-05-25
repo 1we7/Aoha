@@ -2,11 +2,10 @@ const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('ban')
-        .setDescription('Bannir un membre du serveur')
-        .addUserOption(opt => opt.setName('cible').setDescription('Le membre à bannir').setRequired(true))
-        .addStringOption(opt => opt.setName('raison').setDescription('La raison du ban').setRequired(false))
-        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    .setName('ban')
+    .setDescription('Bannir un membre du serveur')
+    .addUserOption(opt => opt.setName('cible').setDescription('Le membre à bannir').setRequired(true))
+    .addStringOption(opt => opt.setName('raison').setDescription('La raison du ban').setRequired(false)),
 
     async execute(interaction) {
         const target = interaction.options.getMember('cible');
