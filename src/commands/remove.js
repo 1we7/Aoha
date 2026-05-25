@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, ChannelType } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,11 +23,14 @@ module.exports = {
 
         if (!target) return interaction.editReply({ content: "Membre introuvable." });
 
-        // Recherche et purge des messages récents dans tous les salons textuels
-        const channels = interaction.guild.channels.cache.filter(c => c.isTextBitRateAllowed === undefined && c.messages);
+        // ✅ CORRIGÉ : filtre les salons textuels avec ChannelType valide
+        const textChannels = interaction.guild.channels.cache.filter(c =>
+            c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement
+        );
+
         let deletedCount = 0;
 
-        for (const [_, channel] of channels) {
+        for (const [_, channel] of textChannels) {
             try {
                 const messages = await channel.messages.fetch({ limit: 100 });
                 const userMessages = messages.filter(m => m.author.id === target.id);
@@ -40,15 +43,19 @@ module.exports = {
 
         // Application de la sanction demandée
         let sanctionText = "Aucune sanction";
-        if (action === 'timeout') {
-            await target.timeout(24 * 60 * 60 * 1000, "Purge via /remove par l'Owner");
-            sanctionText = "Timeout 24 heures";
-        } else if (action === 'kick') {
-            await target.kick("Purge via /remove par l'Owner");
-            sanctionText = "Expulsion (Kick)";
-        } else if (action === 'ban') {
-            await target.ban({ reason: "Purge via /remove par l'Owner" });
-            sanctionText = "Bannissement définitif";
+        try {
+            if (action === 'timeout') {
+                await target.timeout(24 * 60 * 60 * 1000, "Purge via /remove par l'Owner");
+                sanctionText = "Timeout 24 heures";
+            } else if (action === 'kick') {
+                await target.kick("Purge via /remove par l'Owner");
+                sanctionText = "Expulsion (Kick)";
+            } else if (action === 'ban') {
+                await target.ban({ reason: "Purge via /remove par l'Owner" });
+                sanctionText = "Bannissement définitif";
+            }
+        } catch (e) {
+            sanctionText = `Échec sanction : ${e.message}`;
         }
 
         await interaction.editReply({ content: `✅ Nettoyage terminé ! **${deletedCount}** messages supprimés.\n**Sanction appliquée :** ${sanctionText}` });
