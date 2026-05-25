@@ -1,99 +1,142 @@
-'use strict';
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const { ChannelType, PermissionFlagsBits, EmbedBuilder, Colors } = require('discord.js');
-const { getAction } = require('../utils/actionStorage');
-const { nextTicketName } = require('../utils/ticketCounter');
+const BLACKLISTED_WORDS = ['merde', 'putain', 'connard', 'salope', 'encule', 'pd', 'ntm'];
 
-module.exports = async function buttonActions(interaction, client) {
-  if (!interaction.isButton()) return;
-
-  const customId = interaction.customId;
-
-  // ── 1. GESTION DU SYSTÈME DE TICKETS ────────────────
-  if (customId.startsWith('action_ticket_')) {
-    const parts = customId.split(':');
-    const categoryId = parts[1] || null;
-    const prefix = parts[2] || 'ticket-';
-    const rolesStr = parts[3] || '';
-    const staffRoles = rolesStr ? rolesStr.split(';') : [];
-
-    await interaction.deferReply({ ephemeral: true });
-
-    // Compteur persistant
-    const channelName = nextTicketName(interaction.guild.id, prefix);
-
-    const permissionOverwrites = [
-      {
-        id: interaction.guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      },
-      {
-        id: interaction.user.id,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-      },
-    ];
-
-    for (const roleId of staffRoles) {
-      if (roleId) {
-        permissionOverwrites.push({
-          id: roleId,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-        });
-      }
+function validateSecureText(text) {
+    const whitelistRegex = /^[a-zA-Z0-9éèàùçâêîôûëïü\s.,!?'-]+$/;
+    if (!whitelistRegex.test(text)) return { valid: false, reason: "Caractères spéciaux ou polices modifiées interdits." };
+    const lowerText = text.toLowerCase();
+    for (const word of BLACKLISTED_WORDS) {
+        if (lowerText.includes(word)) return { valid: false, reason: "Mot inapproprié ou insulte détecté." };
     }
+    return { valid: true };
+}
 
-    try {
-      const ticketChannel = await interaction.guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        parent: categoryId || null,
-        permissionOverwrites,
-      });
+module.exports = {
+    async execute(interaction, client) {
+        // 1. GESTION DES COMMANDES SLASH
+        if (interaction.isChatInputCommand()) {
+            const command = client.commands.get(interaction.commandName);
+            if (!command) return;
+            try {
+                await command.execute(interaction, client);
+            } catch (error) {
+                console.error(error);
+                await interaction.reply({ content: 'Une erreur est survenue lors de l\'exécution.', ephemeral: true });
+            }
+        }
 
-      await ticketChannel.send({
-        content: `👋 Bienvenue <@${interaction.user.id}> dans votre ticket.\nLe personnel d'administration va vous prendre en charge sous peu.`,
-      });
+        // 2. GESTION DES SUBMISSIONS DE MODALS
+        else if (interaction.isModalSubmit()) {
+            
+            // Traitement Modal MP
+            if (interaction.customId.startsWith('mp_modal_') || interaction.customId.startsWith('mp_reply_modal_')) {
+                const isReply = interaction.customId.startsWith('mp_reply_modal_');
+                const targetId = interaction.customId.split('_')[isReply ? 3 : 2];
+                const messageText = interaction.fields.getTextInputValue('mp_text_input');
 
-      await interaction.editReply({ content: `✅ Votre ticket privé a été ouvert avec succès ici : ${ticketChannel}` });
-    } catch (err) {
-      console.error('[Ticket System] Erreur de création du salon:', err);
-      await interaction.editReply({ content: `❌ Impossible de créer le salon du ticket. Vérifiez mes permissions "Gérer les salons".` });
+                const validation = validateSecureText(messageText);
+                if (!validation.valid) {
+                    return interaction.reply({ content: `⚠️ **Refusé :** ${validation.reason}`, ephemeral: true });
+                }
+
+                try {
+                    const targetUser = await client.users.fetch(targetId);
+                    const mpEmbed = new EmbedBuilder()
+                        .setColor('#2b2d31')
+                        .setTitle(isReply ? "✉️ Réponse anonyme reçue !" : "✉️ Message anonyme reçu !")
+                        .setDescription(messageText)
+                        .setTimestamp();
+
+                    const replyButton = new ButtonBuilder()
+                        .setCustomId(`mp_reply_btn_${interaction.user.id}`)
+                        .setLabel('Répondre anonymement')
+                        .setStyle(ButtonStyle.Primary);
+
+                    await targetUser.send({ embeds: [mpEmbed], components: [new ActionRowBuilder().addComponents(replyButton)] });
+                    await interaction.reply({ content: "✅ Envoyé anonymement !", ephemeral: true });
+                } catch {
+                    await interaction.reply({ content: "❌ Impossible d'envoyer le message privé (MPs fermés).", ephemeral: true });
+                }
+            }
+
+            // Traitement Modal /embed
+            else if (interaction.customId === 'embed_generator_modal') {
+                const title = interaction.fields.getTextInputValue('embed_title');
+                const description = interaction.fields.getTextInputValue('embed_desc');
+                const color = interaction.fields.getTextInputValue('embed_color') || '#2b2d31';
+                const footer = interaction.fields.getTextInputValue('embed_footer');
+
+                const finalColor = /^#([0-9A-F]{3}){1,2}$/i.test(color) ? color : '#2b2d31';
+                const embed = new EmbedBuilder().setDescription(description).setColor(finalColor);
+                if (title) embed.setTitle(title);
+                if (footer) embed.setFooter({ text: footer });
+
+                await interaction.channel.send({ embeds: [embed] });
+                await interaction.reply({ content: '✅ Embed généré avec succès !', ephemeral: true });
+            }
+        }
+
+        // 3. GESTION DES BOUTONS
+        else if (interaction.isButton()) {
+            
+            // Bouton Répondre du système MP
+            if (interaction.customId.startsWith('mp_reply_btn_')) {
+                const targetId = interaction.customId.split('_')[3];
+                const modal = new ModalBuilder().setCustomId(`mp_reply_modal_${targetId}`).setTitle('Répondre anonymement');
+                const input = new TextInputBuilder().setCustomId('mp_text_input').setLabel('Ta réponse').setStyle(TextInputStyle.Paragraph).setRequired(true);
+                modal.addComponents(new ActionRowBuilder().addComponents(input));
+                await interaction.showModal(modal);
+            }
+
+            // Bouton Participer au Giveaway
+            else if (interaction.customId.startsWith('giveaway_join_')) {
+                const giveawayId = interaction.customId.split('_')[2];
+                const db = client.getDB();
+                if (!db.giveaways[giveawayId]) return interaction.reply({ content: "❌ Ce giveaway est terminé.", ephemeral: true });
+
+                if (db.giveaways[giveawayId].participants.includes(interaction.user.id)) {
+                    return interaction.reply({ content: "⚠️ Tu participes déjà déjà à ce tirage !", ephemeral: true });
+                }
+
+                db.giveaways[giveawayId].participants.push(interaction.user.id);
+                client.saveDB(db);
+
+                // Mise à jour visuelle instantanée du compteur sur le bouton (Components V2 Style)
+                const count = db.giveaways[giveawayId].participants.length;
+                const updatedRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`giveaway_join_${giveawayId}`).setLabel(`Participer (${count})`).setStyle(ButtonStyle.Primary)
+                );
+
+                await interaction.message.edit({ components: [updatedRow] });
+                await interaction.reply({ content: "✅ Inscription enregistrée !", ephemeral: true });
+            }
+
+            // Système anti-mention (Boutons réservés à l'Owner)
+            else if (interaction.customId.startsWith('ping_approve_') || interaction.customId.startsWith('ping_deny_')) {
+                if (interaction.user.id !== interaction.guild.ownerId) {
+                    return interaction.reply({ content: "❌ Seul le propriétaire du serveur peut valider cette action.", ephemeral: true });
+                }
+
+                const action = interaction.customId.split('_')[1];
+                const pingId = interaction.customId.split('_')[2];
+                const db = client.getDB();
+                const pingData = db.pendingPings[pingId];
+
+                if (!pingData) return interaction.reply({ content: "Données introuvables ou expirées.", ephemeral: true });
+
+                if (action === 'approve') {
+                    const channel = await client.channels.fetch(pingData.channelId);
+                    await channel.send({ content: `📢 **Message de <@${pingData.authorId}> :**\n${pingData.content}` });
+                    await interaction.reply({ content: "✅ Mention validée et renvoyée !", ephemeral: true });
+                } else {
+                    await interaction.reply({ content: "❌ Message rejeté. Pense à sanctionner le membre si nécessaire.", ephemeral: true });
+                }
+
+                delete db.pendingPings[pingId];
+                client.saveDB(db);
+                try { await interaction.message.delete(); } catch(e) {}
+            }
+        }
     }
-    return;
-  }
-
-  // ── 2. GESTION DES ACTIONS TEXTUELLES (DATA PERSISTANTE) ──
-  let actionType = null;
-  let actionId = null;
-
-  if (customId.startsWith('action_ephemeral_')) {
-    actionType = 'ephemeral';
-    actionId = customId.replace('action_ephemeral_', '');
-  } else if (customId.startsWith('action_dm_')) {
-    actionType = 'dm';
-    actionId = customId.replace('action_dm_', '');
-  } else if (customId.startsWith('action_channel_msg_')) {
-    actionType = 'channel_msg';
-    actionId = customId.replace('action_channel_msg_', '');
-  }
-
-  if (actionType && actionId) {
-    const textMessage = getAction(actionId) || "Contenu textuel introuvable ou expiré.";
-
-    if (actionType === 'ephemeral') {
-      await interaction.reply({ content: textMessage, ephemeral: true });
-    } 
-    else if (actionType === 'dm') {
-      try {
-        await interaction.user.send({ content: textMessage });
-        await interaction.reply({ content: "📥 Je vous ai envoyé la réponse dans vos messages privés !", ephemeral: true });
-      } catch (e) {
-        await interaction.reply({ content: "❌ Impossible de vous envoyer un DM. Vos messages privés sur ce serveur sont probablement fermés.", ephemeral: true });
-      }
-    } 
-    else if (actionType === 'channel_msg') {
-      await interaction.reply({ content: "✅ Message envoyé dans le salon.", ephemeral: true });
-      await interaction.channel.send({ content: textMessage });
-    }
-  }
 };
