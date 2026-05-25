@@ -1,101 +1,77 @@
-// commands/giveaway.js
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-function parseDuration(str) {
-  // simple parser: 1h, 30m, 1d
-  const m = str.match(/^(\d+)(s|m|h|d)$/);
-  if (!m) return null;
-  const v = parseInt(m[1],10);
-  const unit = m[2];
-  let ms = 0;
-  if (unit === 's') ms = v*1000;
-  if (unit === 'm') ms = v*60*1000;
-  if (unit === 'h') ms = v*3600*1000;
-  if (unit === 'd') ms = v*24*3600*1000;
-  return ms;
-}
-
-const giveaways = {}; // in-memory; pour persistance, remplace par fichier/BDD
+const ms = require('ms');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('giveaway')
-    .setDescription('Créer un giveaway (Owner only)')
-    .addStringOption(o => o.setName('lot').setDescription('Lot').setRequired(true))
-    .addStringOption(o => o.setName('duree').setDescription('Durée ex: 1h, 1d').setRequired(true))
-    .addIntegerOption(o => o.setName('gagnants').setDescription('Nombre de gagnants').setRequired(true)),
+    data: new SlashCommandBuilder()
+        .setName('giveaway')
+        .setDescription('Lance un concours avec inscription en temps réel par bouton.')
+        .addStringOption(opt => opt.setName('lot').setDescription('Le prix à gagner').setRequired(true))
+        .addStringOption(opt => opt.setName('duree').setDescription('Durée (ex: 10s, 5m, 2h, 1d)').setRequired(true))
+        .addIntegerOption(opt => opt.setName('gagnants').setDescription('Nombre de gagnants').setRequired(true)),
 
-  async execute(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: 'Commande disponible uniquement en serveur.', ephemeral: true });
-    if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: 'Commande réservée au Owner du serveur.', ephemeral: true });
+    async execute(interaction, client) {
+        if (interaction.user.id !== interaction.guild.ownerId) {
+            return interaction.reply({ content: "❌ Commande réservée à l'Owner.", ephemeral: true });
+        }
 
-    const lot = interaction.options.getString('lot');
-    const duree = interaction.options.getString('duree');
-    const gagnants = interaction.options.getInteger('gagnants') || 1;
+        const prize = interaction.options.getString('lot');
+        const durationStr = interaction.options.getString('duree');
+        const winnerCount = interaction.options.getInteger('gagnants');
+        const duration = ms(durationStr);
 
-    const ms = parseDuration(duree);
-    if (!ms) return interaction.reply({ content: 'Durée invalide. Exemple: 1h, 30m, 1d', ephemeral: true });
+        if (!duration) return interaction.reply({ content: "❌ Format de durée invalide (Utilise s, m, h, d).", ephemeral: true });
 
-    const embed = new EmbedBuilder()
-      .setTitle('🎉 Giveaway')
-      .setDescription(`${lot}\nTermine dans ${duree}\nGagnants: ${gagnants}`)
-      .setColor('#00B894')
-      .setTimestamp();
+        await interaction.reply({ content: "Création du concours...", ephemeral: true });
 
-    const btn = new ButtonBuilder().setCustomId(`give_join|${Date.now()}`).setLabel('Participer (0)').setStyle(ButtonStyle.Primary);
-    const row = new ActionRowBuilder().addComponents(btn);
+        const giveawayId = Date.now().toString();
+        const db = client.getDB();
+        db.giveaways[giveawayId] = { prize, winnerCount, participants: [] };
+        client.saveDB(db);
 
-    const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+        const endTimestamp = Math.floor((Date.now() + duration) / 1000);
+        const giveawayEmbed = new EmbedBuilder()
+            .setColor('#ff007f')
+            .setTitle(`🎉 GIVEAWAY : ${prize} 🎉`)
+            .setDescription(`Cliquez sur le bouton ci-dessous pour participer !\n\n⏱️ **Fin du concours :** <t:${endTimestamp}:R>\n👥 **Nombre de gagnants :** ${winnerCount}`)
+            .setTimestamp();
 
-    // store giveaway
-    const id = msg.id;
-    giveaways[id] = { messageId: id, channelId: msg.channelId, lot, end: Date.now()+ms, participants: new Set(), gagnants };
-
-    // schedule end
-    setTimeout(async () => {
-      const g = giveaways[id];
-      if (!g) return;
-      // pick winners
-      const arr = Array.from(g.participants);
-      const winners = [];
-      for (let i=0;i<Math.min(g.gagnants, arr.length);i++) {
-        const idx = Math.floor(Math.random()*arr.length);
-        winners.push(arr.splice(idx,1)[0]);
-      }
-      // disable buttons
-      try {
-        const ch = await interaction.client.channels.fetch(g.channelId);
-        const m = await ch.messages.fetch(g.messageId);
-        const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('give_disabled').setLabel(`Participer (${g.participants.size})`).setStyle(ButtonStyle.Secondary).setDisabled(true)
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`giveaway_join_${giveawayId}`).setLabel('Participer (0)').setStyle(ButtonStyle.Primary)
         );
-        await m.edit({ components: [disabledRow] });
-        const resultText = winners.length ? winners.map(w => `<@${w}>`).join(', ') : 'Aucun participant';
-        await ch.send({ content: `🎉 Giveaway terminé ! Gagnant(s): ${resultText}` });
-      } catch (e) {}
-      delete giveaways[id];
-    }, ms);
 
-    return;
-  },
+        const msg = await interaction.channel.send({ embeds: [giveawayEmbed], components: [row] });
 
-  async handleButton(interaction) {
-    if (!interaction.isButton()) return false;
-    if (!interaction.customId.startsWith('give_join|')) return false;
-    const msgId = interaction.message.id;
-    const g = giveaways[msgId];
-    if (!g) return interaction.reply({ content: 'Giveaway introuvable ou terminé.', ephemeral: true });
+        // Déclenchement automatique de la fin du chrono
+        setTimeout(async () => {
+            const currentDb = client.getDB();
+            const gData = currentDb.giveaways[giveawayId];
+            if (!gData) return;
 
-    if (g.participants.has(interaction.user.id)) {
-      g.participants.delete(interaction.user.id);
-    } else {
-      g.participants.add(interaction.user.id);
+            const participants = gData.participants;
+            const winners = [];
+
+            if (participants.length > 0) {
+                const count = Math.min(participants.length, gData.winnerCount);
+                for (let i = 0; i < count; i++) {
+                    const index = Math.floor(Math.random() * participants.length);
+                    winners.push(`<@${participants.splice(index, 1)[0]}>`);
+                }
+            }
+
+            // On désactive le bouton de participation
+            const disabledRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`ended`).setLabel('Concours Terminé').setStyle(ButtonStyle.Secondary).setDisabled(true)
+            );
+
+            if (winners.length > 0) {
+                await msg.edit({ content: `🎉 **Le concours est terminé !**`, components: [disabledRow] });
+                await interaction.channel.send(`GG aux gagnants de **${gData.prize}** : ${winners.join(', ')} ! 🥳`);
+            } else {
+                await msg.edit({ content: `❌ **Giveaway annulé**, aucun participant inscrit.`, components: [disabledRow] });
+            }
+
+            delete currentDb.giveaways[giveawayId];
+            client.saveDB(currentDb);
+        }, duration);
     }
-    // update button label
-    const newRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(interaction.customId).setLabel(`Participer (${g.participants.size})`).setStyle(ButtonStyle.Primary)
-    );
-    await interaction.update({ components: [newRow] }).catch(() => null);
-    return true;
-  }
 };
