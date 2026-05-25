@@ -18,40 +18,9 @@ const {
   PermissionFlagsBits,
 } = require('discord.js');
 
-// On importe notre gestionnaire de stockage persistant
-const { saveAction } = require('../utils/actionStorage');
-
 // ─────────────────────────────────────────────
 // STATE FACTORY
 // ─────────────────────────────────────────────
-/**
- * @typedef {Object} ButtonConfig
- * @property {string}        id         - Unique index-based ID (e.g. "btn_0")
- * @property {string}        label      - Button label text
- * @property {string|null}   emoji      - Optional emoji string
- * @property {ButtonStyle}   style      - discord.js ButtonStyle enum value
- * @property {'ticket'|'link'|'ephemeral'|'dm'|'channel_msg'} actionType
- * @property {string|null}   actionValue       - URL (link), text (ephemeral/dm/channel_msg)
- * @property {string|null}   ticketCategory    - Category channel ID for ticket system
- * @property {string}        ticketPrefix      - Prefix for ticket channel name
- * @property {string[]}      ticketStaffRoles  - Array of role IDs that can see the ticket
- */
-
-/**
- * @typedef {Object} BuilderSession
- * @property {number}        step          - Current wizard step (1-4)
- * @property {string}        title
- * @property {string}        description
- * @property {string}        color         - Hex color string e.g. "#5865F2"
- * @property {string|null}   footer
- * @property {string|null}   author
- * @property {string|null}   image
- * @property {string|null}   thumbnail
- * @property {ButtonConfig[]} buttons      - Up to 5 buttons (Discord limit: 1 ActionRow = 5 buttons)
- * @property {string|null}   targetChannel - Guild text channel ID chosen in step 4
- * @property {number}        editingButtonIndex - Index of button currently being configured (-1 = none)
- */
-
 function createSession() {
   return {
     step: 1,
@@ -88,7 +57,7 @@ function buildPreview(state) {
 }
 
 // ─────────────────────────────────────────────
-// STEP RENDERERS — return { embeds, components }
+// STEP RENDERERS
 // ─────────────────────────────────────────────
 function renderStep1(state) {
   const preview = buildPreview(state);
@@ -279,79 +248,35 @@ function actionLabel(type) {
 // ─────────────────────────────────────────────
 function modalForField(field) {
   const configs = {
-    title: {
-      title: '✏️ Modifier le titre',
-      inputs: [{ id: 'value', label: 'Titre de l\'embed', style: TextInputStyle.Short, max: 256 }],
-    },
-    description: {
-      title: '📝 Modifier la description',
-      inputs: [{ id: 'value', label: 'Description', style: TextInputStyle.Paragraph, max: 4096 }],
-    },
-    color: {
-      title: '🎨 Modifier la couleur',
-      inputs: [{ id: 'value', label: 'Couleur hexadécimale (ex: #FF5733)', style: TextInputStyle.Short, max: 7 }],
-    },
-    footer: {
-      title: '🔻 Modifier le footer',
-      inputs: [{ id: 'value', label: 'Texte du footer', style: TextInputStyle.Short, max: 2048 }],
-    },
-    author: {
-      title: '👤 Modifier l\'auteur',
-      inputs: [{ id: 'value', label: 'Nom de l\'auteur', style: TextInputStyle.Short, max: 256 }],
-    },
-    image: {
-      title: '🖼️ URL de l\'image principale',
-      inputs: [{ id: 'value', label: 'URL (https://...)', style: TextInputStyle.Short, max: 1024 }],
-    },
-    thumbnail: {
-      title: '🔲 URL du thumbnail',
-      inputs: [{ id: 'value', label: 'URL (https://...)', style: TextInputStyle.Short, max: 1024 }],
-    },
-    btn_label: {
-      title: '✏️ Label du bouton',
-      inputs: [{ id: 'value', label: 'Texte du bouton', style: TextInputStyle.Short, max: 80 }],
-    },
-    btn_emoji: {
-      title: '😀 Emoji du bouton',
-      inputs: [{ id: 'value', label: 'Emoji (ex: 🎫 ou <:name:id>)', style: TextInputStyle.Short, max: 100 }],
-    },
-    btn_action_value: {
-      title: '⚙️ Valeur de l\'action',
-      inputs: [{ id: 'value', label: 'URL ou texte du message', style: TextInputStyle.Paragraph, max: 2000 }],
-    },
-    ticket_prefix: {
-      title: '🎟️ Configuration ticket',
-      inputs: [
-        { id: 'prefix', label: 'Préfixe du salon (ex: ticket-)', style: TextInputStyle.Short, max: 20 },
-      ],
-    },
+    title: { title: '✏️ Modifier le titre', inputs: [{ id: 'value', label: 'Titre de l\'embed', style: TextInputStyle.Short, max: 256 }] },
+    description: { title: '📝 Modifier la description', inputs: [{ id: 'value', label: 'Description', style: TextInputStyle.Paragraph, max: 4096 }] },
+    color: { title: '🎨 Modifier la couleur', inputs: [{ id: 'value', label: 'Couleur hexadécimale (ex: #FF5733)', style: TextInputStyle.Short, max: 7 }] },
+    footer: { title: '🔻 Modifier le footer', inputs: [{ id: 'value', label: 'Texte du footer', style: TextInputStyle.Short, max: 2048 }] },
+    author: { title: '👤 Modifier l\'auteur', inputs: [{ id: 'value', label: 'Nom de l\'auteur', style: TextInputStyle.Short, max: 256 }] },
+    image: { title: '🖼️ URL de l\'image principale', inputs: [{ id: 'value', label: 'URL (https://...)', style: TextInputStyle.Short, max: 1024 }] },
+    thumbnail: { title: '🔲 URL du thumbnail', inputs: [{ id: 'value', label: 'URL (https://...)', style: TextInputStyle.Short, max: 1024 }] },
+    btn_label: { title: '✏️ Label du bouton', inputs: [{ id: 'value', label: 'Texte du bouton', style: TextInputStyle.Short, max: 80 }] },
+    btn_emoji: { title: '😀 Emoji du bouton', inputs: [{ id: 'value', label: 'Emoji (ex: 🎫 ou <:name:id>)', style: TextInputStyle.Short, max: 100 }] },
+    btn_action_value: { title: '⚙️ Valeur de l\'action', inputs: [{ id: 'value', label: 'URL ou texte du message', style: TextInputStyle.Paragraph, max: 2000 }] },
+    ticket_prefix: { title: '🎟️ Configuration ticket', inputs: [{ id: 'prefix', label: 'Préfixe du salon (ex: ticket-)', style: TextInputStyle.Short, max: 20 }] },
   };
 
   const cfg = configs[field];
   if (!cfg) return null;
 
-  const modal = new ModalBuilder()
-    .setCustomId(`eb_modal_${field}`)
-    .setTitle(cfg.title);
-
+  const modal = new ModalBuilder().setCustomId(`eb_modal_${field}`).setTitle(cfg.title);
   for (const inp of cfg.inputs) {
     modal.addComponents(
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(inp.id)
-          .setLabel(inp.label)
-          .setStyle(inp.style)
-          .setMaxLength(inp.max)
-          .setRequired(false),
+        new TextInputBuilder().setCustomId(inp.id).setLabel(inp.label).setStyle(inp.style).setMaxLength(inp.max).setRequired(false),
       ),
     );
   }
-
   return modal;
 }
 
 // ─────────────────────────────────────────────
-// COMPILATION FINALE SÉCURISÉE
+// PUBLISH — CRÉATION DU MESSAGE FINAL (1 ligne par bouton)
 // ─────────────────────────────────────────────
 function compileFinalMessage(state, guild) {
   const embed = new EmbedBuilder()
@@ -367,11 +292,11 @@ function compileFinalMessage(state, guild) {
   const components = [];
 
   if (state.buttons.length > 0) {
-    const btnRow = new ActionRowBuilder();
-
     for (let i = 0; i < state.buttons.length; i++) {
+      const btnRow = new ActionRowBuilder();
       const b = state.buttons[i];
 
+      let customId;
       if (b.actionType === 'link') {
         const lb = new ButtonBuilder()
           .setLabel(b.label)
@@ -379,22 +304,24 @@ function compileFinalMessage(state, guild) {
           .setURL(b.actionValue || 'https://discord.com');
         if (b.emoji) lb.setEmoji(b.emoji);
         btnRow.addComponents(lb);
+        components.push(btnRow);
         continue;
+      } else if (b.actionType === 'ticket') {
+        const roles = (b.ticketStaffRoles || []).join(';');
+        customId = `action_ticket_${i}:${b.ticketCategory || ''}:${b.ticketPrefix || 'ticket-'}:${roles}`;
+      } else {
+        // Sauvegarde de l'action de texte (éphémère/DM/salon) dans le fichier JSON persistent
+        const actionId = Math.random().toString(36).substring(2, 11);
+        try {
+          const { saveAction } = require('../utils/actionStorage');
+          saveAction(actionId, b.actionValue || 'Pas de texte défini.');
+        } catch (err) {
+          console.error('[EmbedBuilder] Erreur actionStorage:', err);
+        }
+        customId = `action_${b.actionType}_${actionId}`;
       }
 
-      // Génération d'un identifiant unique court pour ce bouton (Zéro risque de dépassement de limite Discord)
-      const actionId = `act_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`;
-
-      // On sauvegarde la configuration complète dans notre stockage JSON
-      saveAction(actionId, {
-        actionType: b.actionType,
-        actionValue: b.actionValue,
-        ticketCategory: b.ticketCategory,
-        ticketPrefix: b.ticketPrefix || 'ticket-',
-        ticketStaffRoles: b.ticketStaffRoles || []
-      });
-
-      const customId = `action_${actionId}`;
+      if (customId.length > 100) customId = customId.slice(0, 100);
 
       const bb = new ButtonBuilder()
         .setCustomId(customId)
@@ -403,20 +330,18 @@ function compileFinalMessage(state, guild) {
 
       if (b.emoji) bb.setEmoji(b.emoji);
       btnRow.addComponents(bb);
+      components.push(btnRow); // Ajoute chaque bouton dans une ligne exclusive
     }
-
-    if (btnRow.components.length > 0) components.push(btnRow);
   }
 
   return { embed, components };
 }
 
 // ─────────────────────────────────────────────
-// INTERACTION HANDLER (collector logic)
+// INTERACTION HANDLER
 // ─────────────────────────────────────────────
 async function startCollector(interaction, message) {
   const userId = interaction.user.id;
-
   const collector = message.createMessageComponentCollector({
     filter: (i) => i.user.id === userId,
     time: 10 * 60 * 1000,
@@ -431,35 +356,20 @@ async function startCollector(interaction, message) {
       await i.update(renderStep(state));
       return;
     }
-
     if (i.customId === 'eb_prev') {
       state.step = Math.max(state.step - 1, 1);
       await i.update(renderStep(state));
       return;
     }
 
-    const fieldMap = {
-      eb_title:       'title',
-      eb_description: 'description',
-      eb_color:       'color',
-      eb_footer:      'footer',
-      eb_author:      'author',
-    };
-
+    const fieldMap = { eb_title: 'title', eb_description: 'description', eb_color: 'color', eb_footer: 'footer', eb_author: 'author' };
     if (fieldMap[i.customId]) {
       const modal = modalForField(fieldMap[i.customId]);
       await i.showModal(modal);
-
-      const submitted = await i.awaitModalSubmit({
-        filter: (m) => m.user.id === userId && m.customId === `eb_modal_${fieldMap[i.customId]}`,
-        time: 5 * 60 * 1000,
-      }).catch(() => null);
-
+      const submitted = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === `eb_modal_${fieldMap[i.customId]}`, time: 5 * 60 * 1000 }).catch(() => null);
       if (!submitted) return;
-
       const value = submitted.fields.getTextInputValue('value').trim();
       if (value) state[fieldMap[i.customId]] = value;
-
       await submitted.update(renderStep(state));
       return;
     }
@@ -468,16 +378,9 @@ async function startCollector(interaction, message) {
       const field = i.customId === 'eb_image' ? 'image' : 'thumbnail';
       const modal = modalForField(field);
       await i.showModal(modal);
-
-      const submitted = await i.awaitModalSubmit({
-        filter: (m) => m.user.id === userId && m.customId === `eb_modal_${field}`,
-        time: 5 * 60 * 1000,
-      }).catch(() => null);
-
+      const submitted = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === `eb_modal_${field}`, time: 5 * 60 * 1000 }).catch(() => null);
       if (!submitted) return;
-
-      const url = submitted.fields.getTextInputValue('value').trim();
-      state[field] = url || null;
+      state[field] = submitted.fields.getTextInputValue('value').trim() || null;
       await submitted.update(renderStep(state));
       return;
     }
@@ -491,17 +394,7 @@ async function startCollector(interaction, message) {
 
     if (i.customId === 'eb_add_button') {
       const newIndex = state.buttons.length;
-      state.buttons.push({
-        id: `btn_${newIndex}`,
-        label: '',
-        emoji: null,
-        style: ButtonStyle.Primary,
-        actionType: null,
-        actionValue: null,
-        ticketCategory: null,
-        ticketPrefix: 'ticket-',
-        ticketStaffRoles: [],
-      });
+      state.buttons.push({ id: `btn_${newIndex}`, label: '', emoji: null, style: ButtonStyle.Primary, actionType: null, actionValue: null, ticketCategory: null, ticketPrefix: 'ticket-', ticketStaffRoles: [] });
       state.editingButtonIndex = newIndex;
       await i.update(renderButtonConfig(state, newIndex));
       return;
@@ -515,14 +408,10 @@ async function startCollector(interaction, message) {
     }
 
     const idx = state.editingButtonIndex;
-
     if (i.customId === 'ebbtn_label') {
       const modal = modalForField('btn_label');
       await i.showModal(modal);
-      const sub = await i.awaitModalSubmit({
-        filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_label',
-        time: 5 * 60 * 1000,
-      }).catch(() => null);
+      const sub = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_label', time: 5 * 60 * 1000 }).catch(() => null);
       if (!sub) return;
       state.buttons[idx].label = sub.fields.getTextInputValue('value').trim() || state.buttons[idx].label;
       await sub.update(renderButtonConfig(state, idx));
@@ -532,13 +421,9 @@ async function startCollector(interaction, message) {
     if (i.customId === 'ebbtn_emoji') {
       const modal = modalForField('btn_emoji');
       await i.showModal(modal);
-      const sub = await i.awaitModalSubmit({
-        filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_emoji',
-        time: 5 * 60 * 1000,
-      }).catch(() => null);
+      const sub = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_emoji', time: 5 * 60 * 1000 }).catch(() => null);
       if (!sub) return;
-      const emoji = sub.fields.getTextInputValue('value').trim();
-      state.buttons[idx].emoji = emoji || null;
+      state.buttons[idx].emoji = sub.fields.getTextInputValue('value').trim() || null;
       await sub.update(renderButtonConfig(state, idx));
       return;
     }
@@ -562,20 +447,14 @@ async function startCollector(interaction, message) {
 
       if (['ephemeral', 'dm', 'channel_msg', 'link'].includes(selected)) {
         const modal = modalForField('btn_action_value');
-        modal.setCustomId('eb_modal_btn_action_value').setTitle(
-          selected === 'link' ? '🔗 URL du lien' : '✉️ Contenu du message',
-        );
+        modal.setCustomId('eb_modal_btn_action_value').setTitle(selected === 'link' ? '🔗 URL du lien' : '✉️ Contenu du message');
         await i.showModal(modal);
-        const sub = await i.awaitModalSubmit({
-          filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_action_value',
-          time: 5 * 60 * 1000,
-        }).catch(() => null);
+        const sub = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === 'eb_modal_btn_action_value', time: 5 * 60 * 1000 }).catch(() => null);
         if (!sub) return;
         state.buttons[idx].actionValue = sub.fields.getTextInputValue('value').trim() || null;
         await sub.update(renderButtonConfig(state, idx));
         return;
       }
-
       await i.update(renderButtonConfig(state, idx));
       return;
     }
@@ -583,10 +462,7 @@ async function startCollector(interaction, message) {
     if (i.customId === 'ebbtn_ticket_prefix') {
       const modal = modalForField('ticket_prefix');
       await i.showModal(modal);
-      const sub = await i.awaitModalSubmit({
-        filter: (m) => m.user.id === userId && m.customId === 'eb_modal_ticket_prefix',
-        time: 5 * 60 * 1000,
-      }).catch(() => null);
+      const sub = await i.awaitModalSubmit({ filter: (m) => m.user.id === userId && m.customId === 'eb_modal_ticket_prefix', time: 5 * 60 * 1000 }).catch(() => null);
       if (!sub) return;
       state.buttons[idx].ticketPrefix = sub.fields.getTextInputValue('prefix').trim() || 'ticket-';
       await sub.update(await renderTicketConfig(state, idx));
@@ -618,9 +494,7 @@ async function startCollector(interaction, message) {
     }
 
     if (i.customId === 'ebbtn_cancel') {
-      if (!state.buttons[idx]?.label) {
-        state.buttons.splice(idx, 1);
-      }
+      if (!state.buttons[idx]?.label) state.buttons.splice(idx, 1);
       state.editingButtonIndex = -1;
       state.step = 3;
       await i.update(renderStep(state));
@@ -645,12 +519,7 @@ async function startCollector(interaction, message) {
     if (reason === 'published') return;
     sessions.delete(userId);
     await message.edit({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(Colors.Red)
-          .setTitle('⏰ Session expirée')
-          .setDescription('Votre session de builder d\'embed a expiré. Relancez `/embed` pour recommencer.'),
-      ],
+      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('⏰ Session expirée').setDescription('Votre session de builder d\'embed a expiré. Relancez `/embed` pour recommencer.')],
       components: [],
     }).catch(() => null);
   });
@@ -661,7 +530,6 @@ async function startCollector(interaction, message) {
 // ─────────────────────────────────────────────
 async function renderTicketConfig(state, index) {
   const btn = state.buttons[index];
-
   const embed = new EmbedBuilder()
     .setTitle('🎟️ Configuration du ticket')
     .setColor('#FFD700')
@@ -671,28 +539,10 @@ async function renderTicketConfig(state, index) {
       { name: 'Rôles staff', value: btn.ticketStaffRoles.length ? btn.ticketStaffRoles.map((r) => `<@&${r}>`).join(', ') : '*(aucun)*', inline: false },
     );
 
-  const prefixRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ebbtn_ticket_prefix').setLabel('✏️ Préfixe').setStyle(ButtonStyle.Secondary),
-  );
-
-  const categoryRow = new ActionRowBuilder().addComponents(
-    new ChannelSelectMenuBuilder()
-      .setCustomId('ebbtn_ticket_category')
-      .setPlaceholder('📁 Sélectionner la catégorie parente')
-      .addChannelTypes(ChannelType.GuildCategory),
-  );
-
-  const rolesRow = new ActionRowBuilder().addComponents(
-    new RoleSelectMenuBuilder()
-      .setCustomId('ebbtn_ticket_roles')
-      .setPlaceholder('🛡️ Rôles staff (multi-sélection)')
-      .setMinValues(0)
-      .setMaxValues(10),
-  );
-
-  const doneRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ebbtn_ticket_done').setLabel('✅ Confirmer').setStyle(ButtonStyle.Success),
-  );
+  const prefixRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ebbtn_ticket_prefix').setLabel('✏️ Préfixe').setStyle(ButtonStyle.Secondary));
+  const categoryRow = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('ebbtn_ticket_category').setPlaceholder('📁 Sélectionner la catégorie parente').addChannelTypes(ChannelType.GuildCategory));
+  const rolesRow = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('ebbtn_ticket_roles').setPlaceholder('🛡️ Rôles staff (multi-sélection)').setMinValues(0).setMaxValues(10));
+  const doneRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ebbtn_ticket_done').setLabel('✅ Confirmer').setStyle(ButtonStyle.Success));
 
   return { embeds: [embed], components: [prefixRow, categoryRow, rolesRow, doneRow] };
 }
@@ -711,55 +561,28 @@ async function handlePublish(interaction, state, guild) {
 
   try {
     await channel.send({ embeds: [embed], components });
-
     await interaction.update({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(Colors.Green)
-          .setTitle('✅ Embed publié !')
-          .setDescription(`Votre embed a été envoyé dans <#${state.targetChannel}>.`),
-      ],
+      embeds: [new EmbedBuilder().setColor(Colors.Green).setTitle('✅ Embed publié !').setDescription(`Votre embed a été envoyé dans <#${state.targetChannel}>.`)],
       components: [],
     });
   } catch (err) {
     console.error('[embed] Publish error:', err);
     await interaction.update({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(Colors.Red)
-          .setTitle('❌ Erreur de publication')
-          .setDescription(`Impossible d'envoyer l'embed : ${err.message}`),
-      ],
+      embeds: [new EmbedBuilder().setColor(Colors.Red).setTitle('❌ Erreur de publication').setDescription(`Impossible d'envoyer l'embed : ${err.message}`)],
       components: [],
     });
   }
 }
 
-// ─────────────────────────────────────────────
-// COMMAND DEFINITION
-// ─────────────────────────────────────────────
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('embed')
-    .setDescription('Ouvre le builder d\'embed interactif guidé par étapes.')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
-
+  data: new SlashCommandBuilder().setName('embed').setDescription('Ouvre le builder d\'embed interactif guidé par étapes.').setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
   async execute(interaction) {
     const userId = interaction.user.id;
-
     sessions.set(userId, createSession());
     const state = sessions.get(userId);
-
     const payload = renderStep(state);
-
-    const reply = await interaction.reply({
-      ...payload,
-      ephemeral: true,
-      fetchReply: true,
-    });
-
+    const reply = await interaction.reply({ ...payload, ephemeral: true, fetchReply: true });
     await startCollector(interaction, reply);
   },
-
   sessions,
 };
