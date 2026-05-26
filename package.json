@@ -1,0 +1,15 @@
+{
+  "name": "aoha-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord haut de gamme, sécurisé et optimisé",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  }
+}
